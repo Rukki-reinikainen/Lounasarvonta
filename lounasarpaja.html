@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Satunnainen lounaspaikka</title>
+  <!-- Bootstrap -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    #map { height: 60vh; }
+    #ad-slot {
+      min-height: 90px;
+      margin-top: 1rem;
+      background:#f7f7f7;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      color:#777;
+      font-size:0.9rem;
+    }
+  </style>
+</head>
+<body class="container py-3">
+  <h1 class="mb-3 text-center">Satunnainen lounaspaikka</h1>
+
+  <!-- Paikkakunnan valinta -->
+  <div class="mb-3">
+    <label for="city-select" class="form-label">Valitse paikkakunta</label>
+    <select id="city-select" class="form-select">
+      <option value="" selected disabled>-- Valitse --</option>
+      <option value="Helsinki">Helsinki</option>
+      <option value="Espoo">Espoo</option>
+      <option value="Tampere">Tampere</option>
+      <option value="Vantaa">Vantaa</option>
+      <option value="Oulu">Oulu</option>
+      <option value="Turku">Turku</option>
+      <option value="Jyväskylä">Jyväskylä</option>
+      <option value="Kuopio">Kuopio</option>
+      <option value="Lahti">Lahti</option>
+      <option value="Pori">Pori</option>
+      <option value="Kouvola">Kouvola</option>
+      <option value="Joensuu">Joensuu</option>
+      <option value="Lappeenranta">Lappeenranta</option>
+      <option value="Hämeenlinna">Hämeenlinna</option>
+      <option value="Vaasa">Vaasa</option>
+      <option value="Rovaniemi">Rovaniemi</option>
+      <option value="Seinäjoki">Seinäjoki</option>
+      <option value="Mikkeli">Mikkeli</option>
+      <option value="Kotka">Kotka</option>
+      <option value="Porvoo">Porvoo</option>
+    </select>
+  </div>
+
+  <!-- Paikkatyypin valinta -->
+  <div class="mb-3">
+    <label for="type-select" class="form-label">Paikkatyyppi</label>
+    <select id="type-select" class="form-select">
+      <option value="both" selected>Lounas + Kahvila</option>
+      <option value="restaurant">Vain lounasravintola</option>
+      <option value="cafe">Vain kahvila</option>
+    </select>
+  </div>
+
+  <!-- Säteet -->
+  <div class="mb-3">
+    <label for="radius-select" class="form-label">Säde keskustasta</label>
+    <select id="radius-select" class="form-select">
+      <option value="1">1 km</option>
+      <option value="2" selected>2 km</option>
+      <option value="3">3 km</option>
+      <option value="5">5 km</option>
+    </select>
+  </div>
+
+  <button id="pick-btn" class="btn btn-primary w-100 mb-3" disabled>Arvo paikka</button>
+
+  <div id="result" class="alert alert-info d-none"></div>
+
+  <div id="map" class="mb-3"></div>
+
+  <div id="ad-slot">Mainospaikka (esim. Google AdSense)</div>
+
+  <!-- Kirjastot -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script>
+    // Keskuskoordinaatit (kaupungintalo/keskusta) – suuntaa antavat
+    const cityCoords = {
+      'Helsinki': [60.1699, 24.9384],
+      'Espoo': [60.2055, 24.6559],
+      'Tampere': [61.4978, 23.7604],
+      'Vantaa': [60.2934, 25.0378],
+      'Oulu': [65.0121, 25.4651],
+      'Turku': [60.4518, 22.2666],
+      'Jyväskylä': [62.2415, 25.7209],
+      'Kuopio': [62.8924, 27.6770],
+      'Lahti': [60.9827, 25.6615],
+      'Pori': [61.4867, 21.7980],
+      'Kouvola': [60.8669, 26.7040],
+      'Joensuu': [62.6010, 29.7634],
+      'Lappeenranta': [61.0583, 28.1887],
+      'Hämeenlinna': [60.9959, 24.4643],
+      'Vaasa': [63.0951, 21.6158],
+      'Rovaniemi': [66.5039, 25.7294],
+      'Seinäjoki': [62.7917, 22.8406],
+      'Mikkeli': [61.6886, 27.2727],
+      'Kotka': [60.4667, 26.9458],
+      'Porvoo': [60.3923, 25.6651]
+    };
+
+    const selectCity = document.getElementById('city-select');
+    const selectType = document.getElementById('type-select');
+    const selectRadius = document.getElementById('radius-select');
+    const btn = document.getElementById('pick-btn');
+    const resultEl = document.getElementById('result');
+
+    let map = L.map('map').setView([60.1699, 24.9384], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap'
+    }).addTo(map);
+
+    let marker;
+
+    // Päivitä nappitila ja karttaview
+    function updateBtnState() {
+      const city = selectCity.value;
+      btn.disabled = !city;
+      if (city && cityCoords[city]) {
+        map.setView(cityCoords[city], 12);
+      }
+    }
+    selectCity.addEventListener('change', updateBtnState);
+
+    btn.addEventListener('click', async () => {
+      const city = selectCity.value;
+      const type = selectType.value;
+      const radiusKm = parseInt(selectRadius.value, 10) || 2; // km
+      if (!city) return;
+
+      const [lat, lon] = cityCoords[city] || [];
+      if (!lat || !lon) {
+        showMessage('Kaupungin koordinaatteja ei löytynyt.', 'danger');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Haetaan…';
+      const radius = radiusKm * 1000; // metres
+
+      const makeFilter = (amenity) => `node["amenity"="${amenity}"](around:${radius},${lat},${lon});`;
+      let filter = '';
+      switch (type) {
+        case 'restaurant':
+          filter = makeFilter('restaurant');
+          break;
+        case 'cafe':
+          filter = makeFilter('cafe');
+          break;
+        default:
+          filter = `${makeFilter('restaurant')}${makeFilter('cafe')}`; // molemmat
+      }
+
+      const query = `
+      [out:json][timeout:25];
+      (
+        ${filter}
+      );
+      out center;
+      `;
+
+      try {
+        const response = await fetch('https://overpass-api.de/api/interpreter', {
+          method: 'POST',
+          body: query
+        });
+        const data = await response.json();
+        const nodes = data.elements;
+
+        if (!nodes.length) {
+          showMessage('Ei löytynyt paikkoja valituilla kriteereillä.', 'warning');
+          resetButton();
+          return;
+        }
+
+        const random = nodes[Math.floor(Math.random() * nodes.length)];
+        const name = random.tags.name || 'Nimetön paikka';
+        const mLat = random.lat;
+        const mLon = random.lon;
+
+        if (marker) map.removeLayer(marker);
+        marker = L.marker([mLat, mLon]).addTo(map).bindPopup(name).openPopup();
+        map.setView([mLat, mLon], 15);
+
+        const typeText = type === 'cafe' ? 'kahvila' : type === 'restaurant' ? 'lounasravintola' : 'lounas/kahvila';
+        showMessage(`Ehdotus: <strong>${name}</strong> (${typeText}, ${radiusKm} km säteellä)`, 'success');
+      } catch (e) {
+        showMessage('Virhe haettaessa tietoja. Yritä uudelleen myöhemmin.', 'danger');
+      } finally {
+        resetButton();
+      }
+    });
+
+    function showMessage(html, kind='info') {
+      resultEl.className = `alert alert-${kind}`;
+      resultEl.innerHTML = html;
+      resultEl.classList.remove('d-none');
+    }
+
+    function resetButton() {
+      btn.textContent = 'Arvo paikka';
+      btn.disabled = false;
+    }
+
+    updateBtnState();
+  </script>
+</body>
+</html>
